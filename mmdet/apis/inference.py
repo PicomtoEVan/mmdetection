@@ -92,23 +92,7 @@ def init_detector(
                 'checkpoint\'s meta data, use COCO classes by default.')
             model.dataset_meta = {'classes': get_classes('coco')}
 
-    # Priority:  args.palette -> config -> checkpoint
-    if palette != 'none':
-        model.dataset_meta['palette'] = palette
-    else:
-        test_dataset_cfg = copy.deepcopy(config.test_dataloader.dataset)
-        # lazy init. We only need the metainfo.
-        test_dataset_cfg['lazy_init'] = True
-        metainfo = DATASETS.build(test_dataset_cfg).metainfo
-        cfg_palette = metainfo.get('palette', None)
-        if cfg_palette is not None:
-            model.dataset_meta['palette'] = cfg_palette
-        else:
-            if 'palette' not in model.dataset_meta:
-                warnings.warn(
-                    'palette does not exist, random is used by default. '
-                    'You can also set the palette to customize.')
-                model.dataset_meta['palette'] = 'random'
+    
 
     model.cfg = config  # save the config in the model for convenience
     model.to(device)
@@ -191,7 +175,15 @@ def inference_detector(
         result_list.append(results)
 
     if not is_batch:
-        return result_list[0]
+                # build the data pipeline
+        data_ = test_pipeline(data_)
+        
+        data_['inputs'] = data_['inputs'].unsqueeze(0)
+        data_['data_samples'] = [data_['data_samples']]
+        
+        # forward the model
+        with torch.no_grad():
+            results = model.test_step(data_)[0]
     else:
         return result_list
 
